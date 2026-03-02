@@ -1,0 +1,27 @@
+Backend
+Migraciones formales con Alembic
+Generar scripts de migración en vez de depender de create_all.
+Autenticación real
+Endpoints de login/logout/refresh, hashing de contraseñas, sesiones o JWT.
+Integrar esto con los BoardMember para restringir quién puede ver/editar cada tablero.
+Permisos por rol
+Reglas claras: qué puede hacer owner, qué puede hacer member, tal vez viewer.
+Más detalles de tarea
+Modelos para checklists, comentarios, adjuntos, etiquetas configurables por tablero.
+Tests automatizados
+Tests de API (pytest + httpx) para flujos clave: crear tablero, mover tarjetas, actividad, miembros.
+Frontend
+Integración con AuthJS
+Pantallas de login/registro y protección de rutas; uso del user actual para mostrar solo sus tableros.
+Gestión completa de tarjetas
+Crear/editar/borrar tarjetas y listas desde la UI, no solo moverlas.
+Edición inline de título, descripción, etiquetas y fecha de vencimiento.
+Vista de miembros y roles
+Mostrar quién pertenece al tablero, roles, opción de invitar/gestionar acceso.
+Pulir UX
+Estados de carga/errores, toasts, skeletons; mejores animaciones en drag & drop.
+Infraestructura / DevOps
+Configuración por entorno
+Variables .env bien definidas (DB, CORS, URLs), perfiles para dev/stage/prod.
+Deployment
+Plan para desplegar FastAPI (por ejemplo en Docker) y Next.js (Vercel/otro host) con la configuración correcta.
