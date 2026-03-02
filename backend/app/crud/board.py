@@ -9,7 +9,7 @@ from app.models.board import Board, BoardList, Card
 
 def get_boards(db: Session) -> Sequence[Board]:
   statement = select(Board).options(
-    joinedload(Board.lists).joinedload("cards"),
+    joinedload(Board.lists).joinedload(BoardList.cards),
   ).order_by(Board.id)
   return db.scalars(statement).unique().all()
 
@@ -18,7 +18,7 @@ def get_board_by_id(db: Session, board_id: int) -> Board | None:
   statement = (
     select(Board)
     .options(
-      joinedload(Board.lists).joinedload("cards"),
+      joinedload(Board.lists).joinedload(BoardList.cards),
     )
     .where(Board.id == board_id)
   )

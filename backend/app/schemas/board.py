@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CardBase(BaseModel):
@@ -10,6 +10,13 @@ class CardBase(BaseModel):
   dueDate: datetime | None = None
   position: int
   listId: int
+
+  @field_validator("labels", mode="before")
+  @classmethod
+  def parse_labels(cls, v: str | list[str] | None) -> list[str]:
+    if isinstance(v, str):
+      return [label.strip() for label in v.split(",") if label.strip()]
+    return v or []
 
 
 class CardCreate(CardBase):
