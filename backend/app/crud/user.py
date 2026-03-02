@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.user import BoardMember, User
 
 
+def get_users(db: Session, *, skip: int = 0, limit: int = 100) -> Iterable[User]:
+  statement = select(User).offset(skip).limit(limit)
+  return db.scalars(statement).all()
+
+
 def get_user_by_email(db: Session, *, email: str) -> User | None:
   statement = select(User).where(User.email == email)
   return db.scalar(statement)

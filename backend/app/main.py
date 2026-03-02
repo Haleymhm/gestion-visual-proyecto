@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from app.api.v1.activity import router as activity_router
 from app.api.v1.board import router as board_router
@@ -32,6 +33,10 @@ def create_app() -> FastAPI:
   @app.on_event("startup")
   async def on_startup() -> None:
     init_db()
+
+  @app.get("/", include_in_schema=False)
+  async def root() -> RedirectResponse:
+    return RedirectResponse(url="/docs")
 
   @app.get("/api/v1/health", tags=["health"])
   async def health_check() -> dict[str, str]:
