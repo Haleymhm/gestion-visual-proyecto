@@ -3,3 +3,6 @@ sqlalchemy>=2
 alembic
 psycopg2-binary
 pydantic>=2
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart

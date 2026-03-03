@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { KanbanBoardView, type KanbanBoard } from "@/components/kanban-board";
 
 type ApiCard = {
@@ -35,9 +37,19 @@ async function fetchBoards(): Promise<ApiBoard[]> {
   const baseUrl =
     process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
+  const cookieStore = await cookies();
+  const token = cookieStore.get("access_token")?.value;
+
   const response = await fetch(`${baseUrl}/api/v1/boards`, {
     next: { revalidate: 5 },
+    headers: token ? {
+      "Authorization": `Bearer ${token}`
+    } : {},
   });
+
+  if (response.status === 401) {
+    throw new Error("Unauthorized");
+  }
 
   if (!response.ok) {
     throw new Error("Failed to load boards");
@@ -78,7 +90,10 @@ export default async function Home() {
 
   try {
     apiBoards = await fetchBoards();
-  } catch {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      redirect("/login");
+    }
     // Use fallback board when API is not available
   }
 

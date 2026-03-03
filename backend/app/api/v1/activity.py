@@ -3,12 +3,18 @@ from collections.abc import Sequence
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
+
 from app.crud.activity import get_card_activity
 from app.db.session import get_db
 from app.schemas.activity import CardActivityPublic
 
 
-router = APIRouter(prefix="/activity", tags=["activity"])
+router = APIRouter(
+  prefix="/activity",
+  tags=["activity"],
+  dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get(

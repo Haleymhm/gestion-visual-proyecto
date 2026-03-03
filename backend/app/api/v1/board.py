@@ -5,12 +5,18 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.websockets import WebSocketDisconnect
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
+
 from app.crud.board import get_boards, move_card_between_lists
 from app.db.session import get_db
 from app.schemas.board import BoardPublic, CardMoveRequest
 
 
-router = APIRouter(prefix="/boards", tags=["boards"])
+router = APIRouter(
+  prefix="/boards",
+  tags=["boards"],
+  dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get(

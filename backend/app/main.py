@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.api.v1.activity import router as activity_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.board import router as board_router
 from app.api.v1.user import router as user_router
 from app.db.init_db import init_db
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
 
   app.state.board_connections = defaultdict(set)
 
+  app.include_router(auth_router, prefix="/api/v1")
   app.include_router(board_router, prefix="/api/v1")
   app.include_router(user_router, prefix="/api/v1")
   app.include_router(activity_router, prefix="/api/v1")
