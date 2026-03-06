@@ -28,6 +28,12 @@ class CardCreate(CardBase):
   pass
 
 
+class CardCreateRequest(BaseModel):
+  """Simplified schema for creating a card via the REST API (position/listId inferred server-side)."""
+  title: str = Field(..., max_length=255)
+  description: str | None = Field(None, max_length=2000)
+
+
 class CardUpdate(BaseModel):
   title: str | None = Field(None, max_length=255)
   description: str | None = Field(None, max_length=2000)
@@ -43,6 +49,11 @@ class CardPublic(CardBase):
   comments: list[CommentPublic] = []
   attachments: list[AttachmentPublic] = []
   tags: list[CardTagPublic] = []
+
+  @field_validator("checklists", "comments", "attachments", "tags", mode="before")
+  @classmethod
+  def none_to_list(cls, v: list | None) -> list:
+    return v if v is not None else []
 
   class Config:
     from_attributes = True

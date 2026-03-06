@@ -14,6 +14,8 @@ from app.api.v1.checklists import router as checklists_router
 from app.api.v1.comments import router as comments_router
 from app.api.v1.attachments import router as attachments_router
 from app.db.init_db import init_db
+import app.models  # Import all models to ensure SQLAlchemy mapper registry is complete
+
 
 
 def create_app() -> FastAPI:

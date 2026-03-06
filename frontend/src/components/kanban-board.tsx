@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DragDropContext,
   Draggable,
@@ -82,7 +82,7 @@ export type KanbanBoard = {
 };
 
 type KanbanBoardProps = {
-  board: KanbanBoard;
+  boards: KanbanBoard[];
 };
 
 type ApiCard = {
@@ -146,25 +146,302 @@ function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
   };
 }
 
-export function KanbanBoardView({ board }: KanbanBoardProps) {
-  const [state, setState] = useState<KanbanBoard>(board);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(
-    null,
-  );
-  const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
+/** All mutating requests go through our Next.js proxy so the httpOnly token is attached server-side. */
+async function proxyFetch(path: string, method: string, body?: unknown): Promise<Response> {
+  return fetch(`/api/proxy${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
+// ─── New Board Modal ──────────────────────────────────────────────────────────
+
+type NewBoardModalProps = {
+  onClose: () => void;
+  onCreated: (board: KanbanBoard) => void;
+};
+
+function NewBoardModal({ onClose, onCreated }: NewBoardModalProps) {
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
-    const wsUrl = baseUrl.replace(/^http/, "ws");
+    inputRef.current?.focus();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await proxyFetch("/boards", "POST", { name: name.trim() });
+      if (!res.ok) throw new Error("Error al crear el tablero");
+      const data = (await res.json()) as ApiBoard;
+      onCreated(mapApiBoardToKanban(data));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-4 text-base font-semibold text-slate-50">
+          Nuevo tablero
+        </h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Nombre del tablero"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={255}
+            className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-emerald-500"
+          />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-500"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !name.trim()}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {loading ? "Creando..." : "Crear tablero"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Inline Add Column Form ───────────────────────────────────────────────────
+
+type AddColumnFormProps = {
+  boardId: number | string;
+  onCreated: (board: KanbanBoard) => void;
+};
+
+function AddColumnForm({ boardId, onCreated }: AddColumnFormProps) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setLoading(true);
+    try {
+      const res = await proxyFetch(`/boards/${String(boardId)}`, "POST", { name: title.trim() });
+      if (!res.ok) throw new Error("Error");
+      const data = (await res.json()) as ApiBoard;
+      onCreated(mapApiBoardToKanban(data));
+      setTitle("");
+      setOpen(false);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex h-min w-64 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/40 px-3 py-3 text-sm font-medium text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300"
+      >
+        + Agregar columna
+      </button>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex w-64 shrink-0 flex-col gap-2 rounded-xl border border-emerald-700 bg-slate-900/60 p-3 shadow-sm"
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        placeholder="Título de la columna"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        maxLength={255}
+        className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-emerald-500"
+      />
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={loading || !title.trim()}
+          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {loading ? "..." : "Agregar"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setTitle(""); }}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Inline Add Card Form ─────────────────────────────────────────────────────
+
+type AddCardFormProps = {
+  boardId: number | string;
+  listId: number | string;
+  onCreated: (board: KanbanBoard) => void;
+};
+
+function AddCardForm({ boardId, listId, onCreated }: AddCardFormProps) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await proxyFetch(
+        `/boards/${String(boardId)}/lists/${String(listId)}`,
+        "POST",
+        { title: title.trim(), description: null },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { detail?: string };
+        throw new Error(data.detail ?? `Error ${res.status}`);
+      }
+      const data = (await res.json()) as ApiBoard;
+      onCreated(mapApiBoardToKanban(data));
+      setTitle("");
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al crear la tarjeta");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-2 w-full rounded-md border border-dashed border-slate-700 px-2 py-1 text-left text-[11px] font-medium text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300"
+      >
+        + Agregar tarjeta
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-2 flex flex-col gap-2">
+      <textarea
+        ref={inputRef}
+        placeholder="Título de la tarjeta"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        rows={2}
+        maxLength={255}
+        className="w-full resize-none rounded-lg border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-emerald-500"
+      />
+      {error && <p className="text-[10px] text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={loading || !title.trim()}
+          className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+        >
+          {loading ? "..." : "Agregar"}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setTitle(""); setError(null); }}
+          className="rounded-lg border border-slate-700 px-3 py-1 text-[11px] text-slate-400 hover:text-slate-200"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Main board view ──────────────────────────────────────────────────────────
+
+export function KanbanBoardView({ boards }: KanbanBoardProps) {
+  const [allBoards, setAllBoards] = useState<KanbanBoard[]>(boards);
+  const [activeId, setActiveId] = useState<number | string>(
+    boards[0]?.id ?? "demo-board",
+  );
+  const state = allBoards.find((b) => b.id === activeId) ?? allBoards[0] ?? {
+    id: "demo-board",
+    name: "Sin tableros",
+    columns: [],
+  };
+
+  // Helper: update a single board in the allBoards list
+  const upsertBoard = (updated: KanbanBoard) => {
+    setAllBoards((prev) => {
+      const idx = prev.findIndex((b) => b.id === updated.id);
+      if (idx === -1) return [...prev, updated];
+      const copy = [...prev];
+      copy[idx] = updated;
+      return copy;
+    });
+  };
+
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
+  const [isNewBoardOpen, setIsNewBoardOpen] = useState(false);
+  const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+    const wsUrl = apiUrl.replace(/^http/, "ws");
     const websocket = new WebSocket(
-      `${wsUrl}/ws/boards/${String(board.id)}`,
+      `${wsUrl}/ws/boards/${String(state.id)}`,
     );
 
     websocket.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data) as ApiBoard;
-        setState(mapApiBoardToKanban(data));
+        upsertBoard(mapApiBoardToKanban(data));
       } catch {
         // Ignore malformed messages
       }
@@ -173,7 +450,8 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
     return () => {
       websocket.close();
     };
-  }, [board.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.id]);
 
   const persistMove = async (
     cardId: string,
@@ -181,25 +459,13 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
     destListId: string,
     destIndex: number,
   ) => {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
-
     try {
-      await fetch(
-        `${baseUrl}/api/v1/boards/${String(board.id)}/move-card`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            cardId: Number(cardId),
-            sourceListId: Number(sourceListId),
-            destListId: Number(destListId),
-            destIndex,
-          }),
-        },
-      );
+      await proxyFetch(`/boards/${String(state.id)}/move-card`, "POST", {
+        cardId: Number(cardId),
+        sourceListId: Number(sourceListId),
+        destListId: Number(destListId),
+        destIndex,
+      });
     } catch {
       // In a real app we would surface an error toast and maybe refetch.
     }
@@ -259,6 +525,17 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
     });
   };
 
+  // For drag-end we need to mutate the active board inside allBoards
+  const setState = (updater: (prev: KanbanBoard) => KanbanBoard) => {
+    setAllBoards((prev) => {
+      const idx = prev.findIndex((b) => b.id === activeId);
+      if (idx === -1) return prev;
+      const copy = [...prev];
+      copy[idx] = updater(copy[idx]!);
+      return copy;
+    });
+  };
+
   const selectedCard: KanbanCard | null =
     selectedCardId == null
       ? null
@@ -289,6 +566,49 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
               </p>
             </div>
           </div>
+
+          {/* Board switcher */}
+          <div className="relative hidden md:flex items-center gap-1">
+            {allBoards.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => { setActiveId(b.id); setSelectedCardId(null); }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${b.id === state.id
+                  ? "bg-emerald-600 text-white shadow"
+                  : "border border-slate-700 bg-slate-900 text-slate-300 hover:border-emerald-500 hover:text-emerald-300"
+                  }`}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Board switcher (mobile dropdown) */}
+          <div className="relative md:hidden">
+            <button
+              onClick={() => setIsBoardMenuOpen((o) => !o)}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200"
+            >
+              {state.name} ▾
+            </button>
+            {isBoardMenuOpen && (
+              <div className="absolute right-0 z-50 mt-1 w-48 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-xl">
+                {allBoards.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => { setActiveId(b.id); setSelectedCardId(null); setIsBoardMenuOpen(false); }}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition ${b.id === state.id
+                      ? "bg-emerald-600/20 text-emerald-300"
+                      : "text-slate-300 hover:bg-slate-800"
+                      }`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsManageTagsOpen(true)}
@@ -296,8 +616,11 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
             >
               Manage Tags
             </button>
-            <button className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-sm transition hover:border-emerald-500 hover:text-emerald-300">
-              New board
+            <button
+              onClick={() => setIsNewBoardOpen(true)}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-sm transition hover:border-emerald-500 hover:text-emerald-300"
+            >
+              Nuevo tablero
             </button>
           </div>
         </div>
@@ -307,11 +630,10 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
         <section className="flex items-center justify-between gap-2">
           <div className="space-y-1">
             <h1 className="text-lg font-semibold tracking-tight md:text-xl">
-              {board.name}
+              {state.name}
             </h1>
             <p className="text-xs text-slate-400 md:text-sm">
-              Drag cards between columns to reorganize your work. This board
-              data is coming from the API.
+              Arrastra tarjetas entre columnas para reorganizar tu trabajo.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -433,29 +755,46 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
                       ))}
                       {provided.placeholder}
                     </div>
-                    <button className="mt-2 w-full rounded-md border border-dashed border-slate-700 px-2 py-1 text-left text-[11px] font-medium text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300">
-                      + Add card
-                    </button>
+
+                    {/* Add card form */}
+                    <AddCardForm
+                      boardId={state.id}
+                      listId={column.id}
+                      onCreated={(updatedBoard) => upsertBoard(updatedBoard)}
+                    />
                   </div>
                 )}
               </Droppable>
             ))}
 
-            <button className="flex h-min w-64 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-900/40 px-3 py-3 text-sm font-medium text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300">
-              + Add column
-            </button>
+            <AddColumnForm
+              boardId={state.id}
+              onCreated={(updatedBoard) => upsertBoard(updatedBoard)}
+            />
           </section>
         </DragDropContext>
       </main>
+
       <CardDetailDialog
         board={state}
         card={selectedCard}
         onClose={() => setSelectedCardId(null)}
       />
+
       {isManageTagsOpen && (
         <ManageTagsDialog board={state} onClose={() => setIsManageTagsOpen(false)} />
+      )}
+
+      {isNewBoardOpen && (
+        <NewBoardModal
+          onClose={() => setIsNewBoardOpen(false)}
+          onCreated={(newBoard) => {
+            upsertBoard(newBoard);
+            setActiveId(newBoard.id);
+            setIsNewBoardOpen(false);
+          }}
+        />
       )}
     </div>
   );
 }
-

@@ -27,12 +27,6 @@ type ApiBoard = {
   lists: ApiList[];
 };
 
-const fallbackBoard: KanbanBoard = {
-  id: "demo-board",
-  name: "Team roadmap",
-  columns: [],
-};
-
 async function fetchBoards(): Promise<ApiBoard[]> {
   const baseUrl =
     process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
@@ -94,13 +88,10 @@ export default async function Home() {
     if (error instanceof Error && error.message === "Unauthorized") {
       redirect("/login");
     }
-    // Use fallback board when API is not available
+    // Use empty list when API is not available
   }
 
-  const selectedBoard =
-    apiBoards.length > 0
-      ? mapApiBoardToKanban(apiBoards[0])
-      : fallbackBoard;
+  const allBoards = apiBoards.map(mapApiBoardToKanban);
 
-  return <KanbanBoardView board={selectedBoard} />;
+  return <KanbanBoardView boards={allBoards} />;
 }

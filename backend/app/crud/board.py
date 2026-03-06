@@ -1,27 +1,46 @@
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.crud.activity import log_card_activity
 from app.models.board import Board, BoardList, Card
+from app.models.user import BoardMember
+from app.schemas.board import BoardCreate, BoardListCreate, CardCreate
 
 
-def get_boards(db: Session) -> Sequence[Board]:
-  statement = select(Board).options(
-    joinedload(Board.lists).joinedload(BoardList.cards),
-  ).order_by(Board.id)
+def get_boards(db: Session, user_id: int) -> Sequence[Board]:
+  statement = (
+    select(Board)
+    .join(BoardMember)
+    .where(BoardMember.userId == user_id)
+    .options(
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.checklists),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.comments),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.attachments),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.tags),
+    )
+    .order_by(Board.id)
+  )
   return db.scalars(statement).unique().all()
 
 
-def get_board_by_id(db: Session, board_id: int) -> Board | None:
+def get_board_by_id(db: Session, board_id: int, user_id: int | None = None) -> Board | None:
   statement = (
     select(Board)
     .options(
-      joinedload(Board.lists).joinedload(BoardList.cards),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.checklists),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.comments),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.attachments),
+      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.tags),
     )
     .where(Board.id == board_id)
   )
+  
+  if user_id is not None:
+    statement = statement.join(BoardMember).where(BoardMember.userId == user_id)
+    
   return db.scalar(statement)
 
 
@@ -29,6 +48,7 @@ def move_card_between_lists(
   db: Session,
   *,
   board_id: int,
+  user_id: int,
   card_id: int,
   source_list_id: int,
   dest_list_id: int,
@@ -108,9 +128,105 @@ def move_card_between_lists(
 
   db.commit()
 
-  board = get_board_by_id(db, board_id=board_id)
+  board = get_board_by_id(db, board_id=board_id, user_id=user_id)
   if board is None:
     msg = "Board not found after card move"
     raise ValueError(msg)
   return board
 
+def create_board(db: Session, payload: BoardCreate, user_id: int) -> Board:
+  board = Board(name=payload.name, createdAt=datetime.utcnow())
+  db.add(board)
+  db.flush() # Flush to get board.id
+  
+  # Create the user membership association
+  membership = BoardMember(
+    boardId=board.id,
+    userId=user_id,
+    role="owner"
+  )
+  db.add(membership)
+  db.commit()
+  db.refresh(board)
+  return board
+
+
+def delete_board(db: Session, board_id: int, user_id: int) -> None:
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    msg = "Board not found or access denied"
+    raise ValueError(msg)
+  db.delete(board)
+  db.commit()
+
+
+def create_list(db: Session, board_id: int, user_id: int, payload: BoardListCreate) -> Board:
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    msg = "Board not found or access denied"
+    raise ValueError(msg)
+  max_pos = max((lst.position for lst in board.lists), default=-1)
+  new_list = BoardList(title=payload.title, position=max_pos + 1, boardId=board_id)
+  db.add(new_list)
+  db.commit()
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    raise ValueError("Board not found after commit")
+  return board
+
+
+def delete_list(db: Session, board_id: int, user_id: int, list_id: int) -> None:
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    msg = "Board not found or access denied"
+    raise ValueError(msg)
+  lst = db.get(BoardList, list_id)
+  if lst is None or lst.boardId != board_id:
+    msg = "List not found"
+    raise ValueError(msg)
+  db.delete(lst)
+  db.commit()
+
+
+def create_card(db: Session, board_id: int, user_id: int, list_id: int, payload: CardCreate) -> Board:
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    msg = "Board not found or access denied"
+    raise ValueError(msg)
+  lst = db.get(BoardList, list_id)
+  if lst is None or lst.boardId != board_id:
+    msg = "List not found"
+    raise ValueError(msg)
+  # Calculate next position
+  stmt = select(Card).where(Card.listId == list_id).order_by(Card.position)
+  existing = list(db.scalars(stmt))
+  max_pos = max((c.position for c in existing), default=-1)
+  card = Card(
+    title=payload.title,
+    description=payload.description,
+    position=max_pos + 1,
+    listId=list_id,
+  )
+  db.add(card)
+  db.commit()
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    raise ValueError("Board not found after commit")
+  return board
+
+
+def delete_card(db: Session, board_id: int, user_id: int, card_id: int) -> None:
+  board = get_board_by_id(db, board_id, user_id)
+  if board is None:
+    msg = "Board not found or access denied"
+    raise ValueError(msg)
+  card = db.get(Card, card_id)
+  if card is None:
+    msg = "Card not found"
+    raise ValueError(msg)
+  lst = db.get(BoardList, card.listId)
+  if lst is None or lst.boardId != board_id:
+    msg = "Card does not belong to the specified board"
+    raise ValueError(msg)
+  db.delete(card)
+  db.commit()

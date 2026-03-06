@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
@@ -7,6 +8,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
+if TYPE_CHECKING:
+  from app.models.tag import BoardTag, CardTag
+  from app.models.checklist import Checklist
+  from app.models.comment import Comment
+  from app.models.attachment import Attachment
 
 class Board(Base):
   __tablename__ = "boards"
