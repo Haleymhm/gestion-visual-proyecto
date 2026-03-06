@@ -2,6 +2,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.checklist import ChecklistPublic
+from app.schemas.comment import CommentPublic
+from app.schemas.attachment import AttachmentPublic
+from app.schemas.tag import CardTagPublic, BoardTagPublic
+
 
 class CardBase(BaseModel):
   title: str = Field(..., max_length=255)
@@ -34,6 +39,10 @@ class CardUpdate(BaseModel):
 
 class CardPublic(CardBase):
   id: int
+  checklists: list[ChecklistPublic] = []
+  comments: list[CommentPublic] = []
+  attachments: list[AttachmentPublic] = []
+  tags: list[CardTagPublic] = []
 
   class Config:
     from_attributes = True
@@ -85,6 +94,7 @@ class BoardPublic(BoardBase):
   id: int
   createdAt: datetime
   lists: list[BoardListPublic] = []
+  tags: list[BoardTagPublic] = []
 
   class Config:
     from_attributes = True

@@ -6,6 +6,7 @@ Endpoints de login/logout/refresh, hashing de contraseñas y JWT. LIST
 Integrar esto con los BoardMember para restringir quién puede ver/editar cada tablero.
 Permisos por rol
 Reglas claras: qué puede hacer owner, qué puede hacer member, tal vez viewer.
+
 Más detalles de tarea
 Modelos para checklists, comentarios, adjuntos, etiquetas configurables por tablero.
 Tests automatizados

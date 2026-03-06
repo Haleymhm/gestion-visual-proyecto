@@ -26,6 +26,11 @@ class Board(Base):
     cascade="all, delete-orphan",
     order_by="BoardList.position",
   )
+  tags: Mapped[list["BoardTag"]] = relationship(
+    "BoardTag",
+    back_populates="board",
+    cascade="all, delete-orphan",
+  )
 
 
 class BoardList(Base):
@@ -71,4 +76,26 @@ class Card(Base):
   )
 
   list: Mapped["BoardList"] = relationship("BoardList", back_populates="cards")
+  checklists: Mapped[list["Checklist"]] = relationship(
+    "Checklist",
+    back_populates="card",
+    cascade="all, delete-orphan",
+  )
+  comments: Mapped[list["Comment"]] = relationship(
+    "Comment",
+    back_populates="card",
+    cascade="all, delete-orphan",
+    order_by="Comment.createdAt",
+  )
+  attachments: Mapped[list["Attachment"]] = relationship(
+    "Attachment",
+    back_populates="card",
+    cascade="all, delete-orphan",
+    order_by="Attachment.uploadedAt",
+  )
+  tags: Mapped[list["CardTag"]] = relationship(
+    "CardTag",
+    back_populates="card",
+    cascade="all, delete-orphan",
+  )
 

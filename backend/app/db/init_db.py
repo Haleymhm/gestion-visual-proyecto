@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from app.db.session import Base, engine, SessionLocal
 from app.models.board import Board, BoardList, Card
 from app.models.user import BoardMember, User
+from app.models.tag import BoardTag, CardTag
+from app.models.checklist import Checklist, ChecklistItem
+from app.models.comment import Comment
+from app.models.attachment import Attachment
 
 
 def init_db() -> None:

@@ -3,11 +3,16 @@ from collections import defaultdict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.activity import router as activity_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.board import router as board_router
 from app.api.v1.user import router as user_router
+from app.api.v1.tags import router as tags_router
+from app.api.v1.checklists import router as checklists_router
+from app.api.v1.comments import router as comments_router
+from app.api.v1.attachments import router as attachments_router
 from app.db.init_db import init_db
 
 
@@ -31,9 +36,18 @@ def create_app() -> FastAPI:
   app.include_router(board_router, prefix="/api/v1")
   app.include_router(user_router, prefix="/api/v1")
   app.include_router(activity_router, prefix="/api/v1")
+  app.include_router(tags_router, prefix="/api/v1")
+  app.include_router(checklists_router, prefix="/api/v1")
+  app.include_router(comments_router, prefix="/api/v1")
+  app.include_router(attachments_router, prefix="/api/v1")
+
+  app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
   @app.on_event("startup")
   async def on_startup() -> None:
+    # Ensure uploads directory exists
+    import os
+    os.makedirs("uploads", exist_ok=True)
     init_db()
 
   @app.get("/", include_in_schema=False)

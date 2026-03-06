@@ -8,6 +8,51 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd";
 import { CardDetailDialog } from "@/components/card-detail-dialog";
+import { ManageTagsDialog } from "@/components/manage-tags-dialog";
+
+export type BoardTag = {
+  id: number;
+  boardId: number;
+  name: string;
+  color: string;
+};
+
+export type CardTag = {
+  id: number;
+  cardId: number;
+  tagId: number;
+  tag: BoardTag;
+};
+
+export type ChecklistItem = {
+  id: number;
+  checklistId: number;
+  content: string;
+  is_completed: boolean;
+};
+
+export type Checklist = {
+  id: number;
+  cardId: number;
+  title: string;
+  items: ChecklistItem[];
+};
+
+export type Comment = {
+  id: number;
+  cardId: number;
+  content: string;
+  createdAt: string;
+  userId: number | null;
+};
+
+export type Attachment = {
+  id: number;
+  cardId: number;
+  file_name: string;
+  file_path: string;
+  uploadedAt: string;
+};
 
 export type KanbanCard = {
   id: number | string;
@@ -15,6 +60,10 @@ export type KanbanCard = {
   description?: string | null;
   labels?: string[];
   dueDate?: string | null;
+  checklists?: Checklist[];
+  comments?: Comment[];
+  attachments?: Attachment[];
+  tags?: CardTag[];
 };
 
 export type KanbanColumn = {
@@ -29,6 +78,7 @@ export type KanbanBoard = {
   name: string;
   createdAt?: string;
   columns: KanbanColumn[];
+  tags?: BoardTag[];
 };
 
 type KanbanBoardProps = {
@@ -43,6 +93,10 @@ type ApiCard = {
   dueDate: string | null;
   position: number;
   listId: number;
+  checklists: Checklist[];
+  comments: Comment[];
+  attachments: Attachment[];
+  tags: CardTag[];
 };
 
 type ApiList = {
@@ -58,6 +112,7 @@ type ApiBoard = {
   name: string;
   createdAt: string;
   lists: ApiList[];
+  tags: BoardTag[];
 };
 
 function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
@@ -65,6 +120,7 @@ function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
     id: board.id,
     name: board.name,
     createdAt: board.createdAt,
+    tags: board.tags,
     columns: board.lists
       .slice()
       .sort((a, b) => a.position - b.position)
@@ -81,6 +137,10 @@ function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
             description: card.description,
             labels: card.labels,
             dueDate: card.dueDate,
+            checklists: card.checklists,
+            comments: card.comments,
+            attachments: card.attachments,
+            tags: card.tags,
           })),
       })),
   };
@@ -91,6 +151,7 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(
     null,
   );
+  const [isManageTagsOpen, setIsManageTagsOpen] = useState(false);
 
   useEffect(() => {
     const baseUrl =
@@ -202,14 +263,14 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
     selectedCardId == null
       ? null
       : (() => {
-          for (const column of state.columns) {
-            const match = column.cards.find(
-              (card) => String(card.id) === selectedCardId,
-            );
-            if (match) return match;
-          }
-          return null;
-        })();
+        for (const column of state.columns) {
+          const match = column.cards.find(
+            (card) => String(card.id) === selectedCardId,
+          );
+          if (match) return match;
+        }
+        return null;
+      })();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
@@ -228,9 +289,17 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
               </p>
             </div>
           </div>
-          <button className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-sm transition hover:border-emerald-500 hover:text-emerald-300">
-            New board
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsManageTagsOpen(true)}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-sm transition hover:border-emerald-500 hover:text-emerald-300"
+            >
+              Manage Tags
+            </button>
+            <button className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 shadow-sm transition hover:border-emerald-500 hover:text-emerald-300">
+              New board
+            </button>
+          </div>
         </div>
       </header>
 
@@ -282,9 +351,8 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
                       </span>
                     </div>
                     <div
-                      className={`space-y-2 ${
-                        snapshot.isDraggingOver ? "bg-slate-900/60" : ""
-                      }`}
+                      className={`space-y-2 ${snapshot.isDraggingOver ? "bg-slate-900/60" : ""
+                        }`}
                     >
                       {column.cards.map((card, index) => (
                         <Draggable
@@ -300,11 +368,10 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
                               onClick={() =>
                                 setSelectedCardId(String(card.id))
                               }
-                              className={`group cursor-pointer rounded-lg border border-slate-800 bg-slate-900/80 p-3 text-xs shadow-sm transition hover:border-emerald-500 hover:bg-slate-900 ${
-                                dragSnapshot.isDragging
-                                  ? "border-emerald-400 shadow-lg"
-                                  : ""
-                              }`}
+                              className={`group cursor-pointer rounded-lg border border-slate-800 bg-slate-900/80 p-3 text-xs shadow-sm transition hover:border-emerald-500 hover:bg-slate-900 ${dragSnapshot.isDragging
+                                ? "border-emerald-400 shadow-lg"
+                                : ""
+                                }`}
                             >
                               <header className="mb-1 flex items-start justify-between gap-2">
                                 <h3 className="text-xs font-semibold leading-snug text-slate-50">
@@ -316,7 +383,16 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
                                   {card.description}
                                 </p>
                               ) : null}
-                              <footer className="flex flex-wrap items-center gap-1.5">
+                              <footer className="flex flex-wrap items-center gap-1.5 mt-2">
+                                {card.tags?.map((cardTag) => (
+                                  <span
+                                    key={cardTag.id}
+                                    style={{ backgroundColor: cardTag.tag.color + "33", color: cardTag.tag.color, borderColor: cardTag.tag.color }}
+                                    className="rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                                  >
+                                    {cardTag.tag.name}
+                                  </span>
+                                ))}
                                 {card.labels?.map((label) => (
                                   <span
                                     key={label}
@@ -325,6 +401,25 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
                                     {label}
                                   </span>
                                 ))}
+                                {card.checklists && card.checklists.length > 0 && (
+                                  <span className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                                    {card.checklists.reduce((acc, c) => acc + c.items.filter(i => i.is_completed).length, 0)}/
+                                    {card.checklists.reduce((acc, c) => acc + c.items.length, 0)}
+                                  </span>
+                                )}
+                                {card.comments && card.comments.length > 0 && (
+                                  <span className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                    {card.comments.length}
+                                  </span>
+                                )}
+                                {card.attachments && card.attachments.length > 0 && (
+                                  <span className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                                    {card.attachments.length}
+                                  </span>
+                                )}
                                 {card.dueDate ? (
                                   <span className="ml-auto flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
                                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -353,9 +448,13 @@ export function KanbanBoardView({ board }: KanbanBoardProps) {
         </DragDropContext>
       </main>
       <CardDetailDialog
+        board={state}
         card={selectedCard}
         onClose={() => setSelectedCardId(null)}
       />
+      {isManageTagsOpen && (
+        <ManageTagsDialog board={state} onClose={() => setIsManageTagsOpen(false)} />
+      )}
     </div>
   );
 }
