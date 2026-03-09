@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -44,8 +45,12 @@ async def list_boards(
   db: Session = Depends(get_db),
   current_user: User = Depends(get_current_user),
 ) -> Sequence[BoardPublic]:
-  boards = get_boards(db=db, user_id=current_user.id)
-  return boards
+  try:
+    boards = get_boards(db=db, user_id=current_user.id)
+    return boards
+  except Exception as exc:
+    logging.exception("list_boards failed for user_id=%s: %s", current_user.id, exc)
+    raise
 
 
 @router.post(
@@ -179,22 +184,32 @@ async def move_card(
       board_id=board_id,
       user_id=current_user.id,
       card_id=payload.cardId,
-      source_list_id=payload.sourceListId,
       dest_list_id=payload.destListId,
       dest_index=payload.destIndex,
     )
   except ValueError as exc:
+    logging.warning(
+      "move-card 400: board=%s payload=%s error=%s",
+      board_id,
+      {
+        "cardId": payload.cardId,
+        "destListId": payload.destListId,
+        "destIndex": payload.destIndex,
+      },
+      exc,
+    )
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
       detail=str(exc),
     ) from exc
 
   payload_json = jsonable_encoder(board)
-  connections = request.app.state.board_connections.get(board_id, set())
-  for websocket in list(connections):
-    try:
-      await websocket.send_json(payload_json)
-    except WebSocketDisconnect:
-      connections.remove(websocket)
+  if payload.notify_clients:
+    connections = request.app.state.board_connections.get(board_id, set())
+    for websocket in list(connections):
+      try:
+        await websocket.send_json(payload_json)
+      except WebSocketDisconnect:
+        connections.remove(websocket)
 
   return board

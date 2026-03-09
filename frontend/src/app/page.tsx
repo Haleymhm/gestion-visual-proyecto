@@ -1,6 +1,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { KanbanBoardView, type KanbanBoard } from "@/components/kanban-board";
+import {
+  KanbanBoardView,
+  type KanbanBoard,
+  type BoardTag,
+  type CardTag,
+  type Checklist,
+  type Comment,
+  type Attachment,
+} from "@/components/kanban-board";
 
 type ApiCard = {
   id: number;
@@ -10,6 +18,10 @@ type ApiCard = {
   dueDate: string | null;
   position: number;
   listId: number;
+  checklists?: Checklist[];
+  comments?: Comment[];
+  attachments?: Attachment[];
+  tags?: CardTag[];
 };
 
 type ApiList = {
@@ -25,6 +37,7 @@ type ApiBoard = {
   name: string;
   createdAt: string;
   lists: ApiList[];
+  tags?: BoardTag[];
 };
 
 async function fetchBoards(): Promise<ApiBoard[]> {
@@ -58,6 +71,7 @@ function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
     id: board.id,
     name: board.name,
     createdAt: board.createdAt,
+    tags: board.tags,
     columns: board.lists
       .slice()
       .sort((a, b) => a.position - b.position)
@@ -74,6 +88,13 @@ function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
             description: card.description,
             labels: card.labels,
             dueDate: card.dueDate,
+            checklists: (card.checklists ?? []).map((cl) => ({
+              ...cl,
+              items: cl.items ?? [],
+            })),
+            comments: card.comments ?? [],
+            attachments: card.attachments ?? [],
+            tags: card.tags ?? [],
           })),
       })),
   };

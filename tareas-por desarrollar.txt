@@ -12,8 +12,8 @@ Modelos para checklists, comentarios, adjuntos, etiquetas configurables por tabl
 Tests automatizados
 Tests de API (pytest + httpx) para flujos clave: crear tablero, mover tarjetas, actividad, miembros.
 Frontend
-Integración con AuthJS
-Pantallas de login/registro y protección de rutas; uso del user actual para mostrar solo sus tableros.
+Integración con AuthJS LISTO
+Pantallas de login/registro y protección de rutas; uso del user actual para mostrar solo sus tableros. LISTO
 Gestión completa de tarjetas
 Crear/editar/borrar tarjetas y listas desde la UI, no solo moverlas.
 Edición inline de título, descripción, etiquetas y fecha de vencimiento.

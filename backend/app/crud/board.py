@@ -6,8 +6,24 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.crud.activity import log_card_activity
 from app.models.board import Board, BoardList, Card
+from app.models.checklist import Checklist
+from app.models.tag import CardTag
 from app.models.user import BoardMember
 from app.schemas.board import BoardCreate, BoardListCreate, CardCreate
+
+
+def _board_load_options():
+  return (
+    selectinload(Board.tags),
+    selectinload(Board.lists)
+    .selectinload(BoardList.cards)
+    .options(
+      selectinload(Card.comments),
+      selectinload(Card.checklists).selectinload(Checklist.items),
+      selectinload(Card.attachments),
+      selectinload(Card.tags).selectinload(CardTag.tag),
+    ),
+  )
 
 
 def get_boards(db: Session, user_id: int) -> Sequence[Board]:
@@ -15,12 +31,7 @@ def get_boards(db: Session, user_id: int) -> Sequence[Board]:
     select(Board)
     .join(BoardMember)
     .where(BoardMember.userId == user_id)
-    .options(
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.checklists),
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.comments),
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.attachments),
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.tags),
-    )
+    .options(*_board_load_options())
     .order_by(Board.id)
   )
   return db.scalars(statement).unique().all()
@@ -29,12 +40,7 @@ def get_boards(db: Session, user_id: int) -> Sequence[Board]:
 def get_board_by_id(db: Session, board_id: int, user_id: int | None = None) -> Board | None:
   statement = (
     select(Board)
-    .options(
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.checklists),
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.comments),
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.attachments),
-      joinedload(Board.lists).joinedload(BoardList.cards).selectinload(Card.tags),
-    )
+    .options(*_board_load_options())
     .where(Board.id == board_id)
   )
   
@@ -50,7 +56,6 @@ def move_card_between_lists(
   board_id: int,
   user_id: int,
   card_id: int,
-  source_list_id: int,
   dest_list_id: int,
   dest_index: int,
 ) -> Board:
@@ -59,9 +64,8 @@ def move_card_between_lists(
     msg = "Card not found"
     raise ValueError(msg)
 
-  if card.listId != source_list_id:
-    msg = "Card does not belong to source list"
-    raise ValueError(msg)
+  # Use the card's actual listId from the DB as the source (source of truth)
+  source_list_id = card.listId
 
   source_list = db.get(BoardList, source_list_id)
   dest_list = db.get(BoardList, dest_list_id)
@@ -85,7 +89,7 @@ def move_card_between_lists(
 
   source_cards = list(db.scalars(source_cards_stmt))
   dest_cards = (
-    source_cards
+    list(source_cards)
     if source_list_id == dest_list_id
     else list(db.scalars(dest_cards_stmt))
   )

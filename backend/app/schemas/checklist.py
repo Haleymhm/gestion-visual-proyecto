@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChecklistItemBase(BaseModel):
@@ -39,6 +39,15 @@ class ChecklistPublic(ChecklistBase):
     id: int
     cardId: int
     items: list[ChecklistItemPublic] = []
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def ensure_items_list(cls, v: list | None) -> list:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        return []
 
     class Config:
         from_attributes = True

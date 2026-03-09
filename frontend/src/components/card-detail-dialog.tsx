@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { KanbanBoard, KanbanCard, Checklist, Comment, Attachment } from "@/components/kanban-board";
+import type { KanbanBoard, KanbanCard, Checklist, ChecklistItem, Comment, Attachment } from "@/components/kanban-board";
 
 type CardActivity = {
   id: number;
@@ -15,14 +15,16 @@ type CardDetailDialogProps = {
   board: KanbanBoard;
   card: KanbanCard | null;
   onClose: () => void;
+  onCardUpdate?: (updatedCard: KanbanCard) => void;
 };
 
-export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps) {
+export function CardDetailDialog({ board, card, onClose, onCardUpdate }: CardDetailDialogProps) {
   const [activity, setActivity] = useState<CardActivity[]>([]);
   const [newComment, setNewComment] = useState("");
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newItemContents, setNewItemContents] = useState<Record<number, string>>({});
 
+  const proxyBase = "/api/proxy";
   const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
 
     const loadActivity = async () => {
       try {
-        const response = await fetch(`${baseUrl}/api/v1/activity/cards/${String(card.id)}`);
+        const response = await fetch(`${proxyBase}/activity/cards/${String(card.id)}`);
         if (!response.ok) return;
         const data = (await response.json()) as CardActivity[];
         setActivity(data);
@@ -39,7 +41,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
       }
     };
     void loadActivity();
-  }, [card, baseUrl]);
+  }, [card]);
 
   if (!card) return null;
 
@@ -47,7 +49,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
 
   const handleAddTag = async (tagId: number) => {
     try {
-      await fetch(`${baseUrl}/api/v1/tags/cards/${card.id}`, {
+      await fetch(`${proxyBase}/tags/cards/${card.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tagId }),
@@ -57,7 +59,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
 
   const handleRemoveTag = async (cardTagId: number) => {
     try {
-      await fetch(`${baseUrl}/api/v1/tags/cards/${cardTagId}`, { method: "DELETE" });
+      await fetch(`${proxyBase}/tags/cards/${cardTagId}`, { method: "DELETE" });
     } catch (e) { console.error(e); }
   };
 
@@ -65,11 +67,18 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
     e.preventDefault();
     if (!newChecklistTitle.trim()) return;
     try {
-      await fetch(`${baseUrl}/api/v1/checklists/cards/${card.id}`, {
+      const res = await fetch(`${proxyBase}/checklists/cards/${card.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newChecklistTitle.trim() }),
       });
+      if (res.ok && onCardUpdate) {
+        const newChecklist = (await res.json()) as Checklist;
+        onCardUpdate({
+          ...card,
+          checklists: [...(card.checklists ?? []), { ...newChecklist, items: newChecklist.items ?? [] }],
+        });
+      }
       setNewChecklistTitle("");
     } catch (e) { console.error(e); }
   };
@@ -79,22 +88,38 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
     const content = newItemContents[checklistId] || "";
     if (!content.trim()) return;
     try {
-      await fetch(`${baseUrl}/api/v1/checklists/${checklistId}/items`, {
+      const res = await fetch(`${proxyBase}/checklists/${checklistId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: content.trim(), is_completed: false }),
       });
+      if (res.ok && onCardUpdate) {
+        const newItem = (await res.json()) as ChecklistItem;
+        const updatedChecklists = (card.checklists ?? []).map((cl) =>
+          cl.id === checklistId ? { ...cl, items: [...(cl.items ?? []), newItem] } : cl
+        );
+        onCardUpdate({ ...card, checklists: updatedChecklists });
+      }
       setNewItemContents(prev => ({ ...prev, [checklistId]: "" }));
     } catch (e) { console.error(e); }
   };
 
   const handleToggleChecklistItem = async (itemId: number, is_completed: boolean) => {
     try {
-      await fetch(`${baseUrl}/api/v1/checklists/items/${itemId}`, {
+      const res = await fetch(`${proxyBase}/checklists/items/${itemId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_completed: !is_completed }),
       });
+      if (res.ok && onCardUpdate) {
+        const updatedChecklists = (card.checklists ?? []).map((cl) => ({
+          ...cl,
+          items: (cl.items ?? []).map((it) =>
+            it.id === itemId ? { ...it, is_completed: !is_completed } : it
+          ),
+        }));
+        onCardUpdate({ ...card, checklists: updatedChecklists });
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -102,11 +127,18 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
     e.preventDefault();
     if (!newComment.trim()) return;
     try {
-      await fetch(`${baseUrl}/api/v1/comments/cards/${card.id}`, {
+      const res = await fetch(`${proxyBase}/comments/cards/${card.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newComment.trim() }),
       });
+      if (res.ok && onCardUpdate) {
+        const newCommentData = (await res.json()) as Comment;
+        onCardUpdate({
+          ...card,
+          comments: [...(card.comments ?? []), newCommentData],
+        });
+      }
       setNewComment("");
     } catch (e) { console.error(e); }
   };
@@ -117,7 +149,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
     const formData = new FormData();
     formData.append("file", file);
     try {
-      await fetch(`${baseUrl}/api/v1/attachments/cards/${card.id}`, {
+      await fetch(`${proxyBase}/attachments/cards/${card.id}`, {
         method: "POST",
         body: formData,
       });
@@ -126,7 +158,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
 
   const handleDeleteAttachment = async (attachmentId: number) => {
     try {
-      await fetch(`${baseUrl}/api/v1/attachments/${attachmentId}`, { method: "DELETE" });
+      await fetch(`${proxyBase}/attachments/${attachmentId}`, { method: "DELETE" });
     } catch (e) { console.error(e); }
   }
 
@@ -189,8 +221,9 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
               <h3 className="text-sm font-medium uppercase tracking-wide text-slate-400">Checklists</h3>
             </div>
             {card.checklists?.map(cl => {
-              const completed = cl.items.filter(i => i.is_completed).length;
-              const total = cl.items.length;
+              const items = cl.items ?? [];
+              const completed = items.filter(i => i.is_completed).length;
+              const total = items.length;
               const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
               return (
                 <div key={cl.id} className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
@@ -199,7 +232,7 @@ export function CardDetailDialog({ board, card, onClose }: CardDetailDialogProps
                     <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${percent}%` }}></div>
                   </div>
                   <ul className="space-y-2 mb-3">
-                    {cl.items.map(item => (
+                    {items.map(item => (
                       <li key={item.id} className="flex items-center gap-2 group">
                         <input
                           type="checkbox"

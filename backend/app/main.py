@@ -1,6 +1,9 @@
+import logging
+import traceback
 from collections import defaultdict
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +34,18 @@ def create_app() -> FastAPI:
     allow_methods=["*"],
     allow_headers=["*"],
   )
+
+  @app.exception_handler(Exception)
+  async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logging.error(
+      "Unhandled exception: %s\n%s",
+      exc,
+      traceback.format_exc(),
+    )
+    return JSONResponse(
+      status_code=500,
+      content={"detail": str(exc)},
+    )
 
   app.state.board_connections = defaultdict(set)
 

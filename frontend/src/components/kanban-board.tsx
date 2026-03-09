@@ -137,7 +137,10 @@ function mapApiBoardToKanban(board: ApiBoard): KanbanBoard {
             description: card.description,
             labels: card.labels,
             dueDate: card.dueDate,
-            checklists: card.checklists,
+            checklists: (card.checklists ?? []).map((cl) => ({
+              ...cl,
+              items: cl.items ?? [],
+            })),
             comments: card.comments,
             attachments: card.attachments,
             tags: card.tags,
@@ -432,6 +435,8 @@ export function KanbanBoardView({ boards }: KanbanBoardProps) {
   const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false);
 
   useEffect(() => {
+    if (state.id === "demo-board") return;
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
     const wsUrl = apiUrl.replace(/^http/, "ws");
     const websocket = new WebSocket(
@@ -459,15 +464,24 @@ export function KanbanBoardView({ boards }: KanbanBoardProps) {
     destListId: string,
     destIndex: number,
   ) => {
+    const payload = {
+      cardId: Number(cardId),
+      sourceListId: Number(sourceListId),
+      destListId: Number(destListId),
+      destIndex,
+    };
     try {
-      await proxyFetch(`/boards/${String(state.id)}/move-card`, "POST", {
-        cardId: Number(cardId),
-        sourceListId: Number(sourceListId),
-        destListId: Number(destListId),
-        destIndex,
-      });
-    } catch {
-      // In a real app we would surface an error toast and maybe refetch.
+      const res = await proxyFetch(
+        `/boards/${String(state.id)}/move-card`,
+        "POST",
+        payload,
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { detail?: string };
+        console.error("[move-card] Backend error:", res.status, data.detail ?? data);
+      }
+    } catch (e) {
+      console.error("[move-card] Request failed:", e);
     }
   };
 
@@ -726,8 +740,8 @@ export function KanbanBoardView({ boards }: KanbanBoardProps) {
                                 {card.checklists && card.checklists.length > 0 && (
                                   <span className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                                    {card.checklists.reduce((acc, c) => acc + c.items.filter(i => i.is_completed).length, 0)}/
-                                    {card.checklists.reduce((acc, c) => acc + c.items.length, 0)}
+                                    {card.checklists.reduce((acc, c) => acc + (c.items ?? []).filter(i => i.is_completed).length, 0)}/
+                                    {card.checklists.reduce((acc, c) => acc + (c.items ?? []).length, 0)}
                                   </span>
                                 )}
                                 {card.comments && card.comments.length > 0 && (
@@ -779,6 +793,18 @@ export function KanbanBoardView({ boards }: KanbanBoardProps) {
         board={state}
         card={selectedCard}
         onClose={() => setSelectedCardId(null)}
+        onCardUpdate={(updatedCard) => {
+          const updatedBoard: KanbanBoard = {
+            ...state,
+            columns: state.columns.map((col) => ({
+              ...col,
+              cards: col.cards.map((c) =>
+                String(c.id) === String(updatedCard.id) ? updatedCard : c
+              ),
+            })),
+          };
+          upsertBoard(updatedBoard);
+        }}
       />
 
       {isManageTagsOpen && (

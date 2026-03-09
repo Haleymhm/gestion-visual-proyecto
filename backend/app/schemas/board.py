@@ -52,8 +52,12 @@ class CardPublic(CardBase):
 
   @field_validator("checklists", "comments", "attachments", "tags", mode="before")
   @classmethod
-  def none_to_list(cls, v: list | None) -> list:
-    return v if v is not None else []
+  def ensure_list(cls, v: list | None) -> list:
+    if v is None:
+      return []
+    if isinstance(v, list):
+      return v
+    return [v]
 
   class Config:
     from_attributes = True
@@ -61,9 +65,10 @@ class CardPublic(CardBase):
 
 class CardMoveRequest(BaseModel):
   cardId: int
-  sourceListId: int
   destListId: int
   destIndex: int
+  sourceListId: int | None = None  # Optional; backend uses card.listId as source
+  notify_clients: bool = True
 
 
 class BoardListBase(BaseModel):
