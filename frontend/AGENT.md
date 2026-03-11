@@ -74,15 +74,14 @@ export default function MyForm() {
 
 ## 4. Convenciones de Nombres
 
-- **Base de Datos:** `camelCase` para campos (ej: `beginDate`), `PascalCase` para modelos (ej: `Ticket`, `Task`).
-- **Variables:** `camelCase` (ej: `espaciosDisponibles`).
+- **Variables:** `camelCase` (ej: `availableSpaces`).
 - **Archivos:** `kebab-case` o seguir la convención del framework.
 
 ## 6. 🚀 Características Principales
 
 - Tableros Dinámicos: Crea múltiples espacios de trabajo para diferentes proyectos.
 - Gestion de usuarios y roles.
-- Sistema de Listas y Tarjetas: Organiza tus tareas en columnas personalizables (Ej: Por hacer, En progreso, Finalizado).
+- Sistema de Listas y Tarjetas: Organiza tus tareas en columnas personalizables (Ej: To do, In progress, Done).
 - Drag & Drop (Arrastrar y Soltar): Interfaz interactiva para mover tarjetas entre listas de forma sencilla.
 - Gestión Detallada de Tareas: Añade descripciones, etiquetas de colores, fechas de vencimiento, notas, archivos y checklists a cada tarjeta.
 - Historial de interacciones.
