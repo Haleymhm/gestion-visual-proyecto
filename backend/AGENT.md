@@ -49,6 +49,14 @@ app/
 - **Models (models/):** Representan la base de datos. Usar el estilo Mapped y mapped_column de SQLAlchemy 2.0.
 
 - **Schemas (schemas/):** Representan los datos que viajan por HTTP. Siempre usar Pydantic. Separar en Base, Create y Response (ej. UserCreate, UserPublic).
+  
+#### 🔒 Seguridad
+
+Las contraseñas nunca se guardan en texto plano (usar passlib con bcrypt).
+
+Los tokens de acceso deben ser JWT.
+
+Las variables sensibles (DB_URL, SECRET_KEY) se leen exclusivamente de un archivo .env.
 
 #### Inyección de Dependencias
 
